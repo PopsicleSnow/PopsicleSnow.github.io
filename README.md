@@ -5,7 +5,7 @@ Ok then ok
 ## CosmicOlympus
 
 CosmicOlympus is a lightweight and easy-to-use new tab extension with design.
-[Downlad it here!](https://github.com/PopsicleSnow/CosmicOlympus)
+[Download it here!](https://github.com/PopsicleSnow/CosmicOlympus)
 
 `Pretty epic`
 
