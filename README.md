@@ -5,13 +5,16 @@ Ok then ok
 ## CosmicOlympus
 
 CosmicOlympus is a lightweight and easy-to-use new tab extension with design.
+[Downlad it here!](https://github.com/PopsicleSnow/CosmicOlympus)
 
-```markdown
-Pretty epic
+`Pretty epic`
 
 
+
+
+
+### Markdown
 For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
 
 ### Support or Contact
 
