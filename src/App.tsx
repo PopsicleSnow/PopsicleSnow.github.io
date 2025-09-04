@@ -95,7 +95,8 @@ function App() {
             </div>
             
             <div>
-              <h3 className="font-medium mb-1 text-gray-100">Macro Tracker</h3>
+              {/* make link blue */}
+              <h3 className="font-medium mb-1 text-gray-100"><a href="https://macros.kuljitu.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Macro Tracker</a></h3>
               <p className="text-gray-400 text-sm leading-relaxed">
                 Provided access to nutrition logging at UC Berkeley dining halls and restaurants
               </p>
