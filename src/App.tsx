@@ -133,7 +133,7 @@ function App() {
                 </a>
               </h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                Provides access to nutrition logging at UC Berkeley dining halls and restaurants
+                Provides access to nutrition logging at 10+ UC Berkeley dining halls and restaurants
               </p>
             </div>
 
