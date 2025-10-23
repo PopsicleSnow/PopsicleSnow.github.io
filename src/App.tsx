@@ -117,16 +117,16 @@ function App() {
 
             <div>
               <h3 className="font-medium mb-1 text-gray-900">
-                <a href="https://macros.kuljitu.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Macro Tracker</a>
+                <a href="https://ucbmacros.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Macro Tracker</a>
                 <a
-                  href="https://macros.kuljitu.com/"
+                  href="https://ucbmacros.com/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center ml-2"
                   aria-label="Visit Macro Tracker"
                 >
                   <img
-                    src="https://macros.kuljitu.com/static/favicon-96x96.png"
+                    src="https://ucbmacros.com/static/favicon-96x96.png"
                     alt="Macro Tracker icon"
                     className="w-4 h-4 inline-block"
                   />
