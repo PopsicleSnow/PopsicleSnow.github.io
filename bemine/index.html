@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Valentine's Quest</title>
+
+  <!-- Import Map for Three.js (no build step) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <!-- Headbreaker Jigsaw Puzzle Library (custom build) -->
+  <script src="headbreaker.js"></script>
+
+  <style>
+    /* ───────────── Reset & Global ───────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --pink: #ff4d6d;
+      --rose: #c9184a;
+      --blush: #fff0f3;
+      --gold: #ffd60a;
+      --dark: #1a1a2e;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--dark);
+      color: #fff;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ───────────── Stage Visibility ───────────── */
+    .stage { display: none; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+    .stage.active { display: flex; }
+
+    /* ───────────── Shared Button ───────────── */
+    .btn {
+      display: inline-block;
+      padding: 14px 36px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1.15rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+    .btn-primary { background: var(--pink); color: #fff; }
+    .btn-gold   { background: var(--gold); color: var(--dark); }
+    .btn-green  { background: #06d6a0; color: var(--dark); }
+
+    /* ───────────── Stage 0 — Intro ───────────── */
+    #stage-0 {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #16213e 0%, #1a1a2e 50%, #0f3460 100%);
+      gap: 30px;
+      text-align: center;
+    }
+    #stage-0 h1 {
+      font-size: clamp(2rem, 6vw, 4rem);
+      background: linear-gradient(90deg, var(--pink), var(--gold));
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    #stage-0 p { color: #aaa; font-size: 1.1rem; max-width: 420px; }
+
+    .hearts-bg {
+      position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 0;
+    }
+    .hearts-bg span {
+      position: absolute;
+      font-size: 1.6rem;
+      opacity: .12;
+      animation: floatUp linear infinite;
+    }
+    @keyframes floatUp {
+      0%   { transform: translateY(100vh) rotate(0deg); opacity: .12; }
+      100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+    }
+
+    /* ───────────── Stage 1 — Driving ───────────── */
+    #stage-1 { flex-direction: column; background: #000; position: relative; }
+    #stage-1 canvas { display: block; width: 100%; height: 100%; }
+    #driving-hud {
+      position: absolute; top: 16px; left: 16px; right: 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none; z-index: 2;
+    }
+    #driving-hud .hud-label {
+      background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+      padding: 8px 18px; border-radius: 999px; font-size: .85rem; color: #ccc;
+    }
+    #driving-success {
+      display: none;
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+      flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      z-index: 3;
+    }
+    #driving-success.show { display: flex; }
+    #driving-success h2 { font-size: 2rem; color: var(--gold); }
+
+    /* ───────────── Stage 2 — Puzzle ───────────── */
+    #stage-2 {
+      flex-direction: column; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #16213e, #1a1a2e);
+      gap: 28px; padding: 20px;
+    }
+    #stage-2 h2 { font-size: 1.6rem; color: var(--gold); }
+
+    /* Flip container — provides 3D perspective */
+    #puzzle-flip-container {
+      perspective: 1200px;
+    }
+
+    #puzzle-canvas-wrapper {
+      background: rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.3);
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 1s cubic-bezier(.4,.2,.2,1);
+    }
+    #puzzle-canvas-wrapper.flipped {
+      transform: rotateY(180deg);
+    }
+
+    /* Front face — the puzzle itself */
+    #puzzle-canvas {
+      border-radius: 8px;
+      overflow: hidden;
+      backface-visibility: hidden;
+    }
+
+    /* Back face — the revealed letters */
+    #puzzle-back {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      backface-visibility: hidden;
+      transform: rotateY(180deg);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, #c9184a 0%, #ff4d6d 50%, #ff758f 100%);
+    }
+    #puzzle-back .flip-letters {
+      display: flex;
+      gap: 20px;
+    }
+    #puzzle-back .flip-letter {
+      width: 90px;
+      height: 110px;
+      background: rgba(255,255,255,.18);
+      border: 3px solid rgba(255,255,255,.5);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.6rem;
+      font-weight: 900;
+      color: var(--gold);
+      text-shadow: 0 2px 12px rgba(0,0,0,.3);
+      animation: letterRevealPulse 1.2s ease 1s both;
+    }
+    #puzzle-back .flip-label {
+      font-size: 1.1rem;
+      color: rgba(255,255,255,.85);
+      font-weight: 600;
+      letter-spacing: .05em;
+    }
+
+    @keyframes letterRevealPulse {
+      0%   { transform: scale(.7); opacity: 0; }
+      50%  { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    #puzzle-success { 
+      display: none; 
+      margin-top: 10px;
+      animation: fadeIn 0.5s ease;
+    }
+    #puzzle-success.show { display: block; }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ───────────── Stage 3 — Scratch-to-Reveal ───────────── */
+    #stage-3 {
+      flex-direction: column; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #16213e, #1a1a2e);
+      gap: 16px;
+    }
+    #stage-3 h2 { font-size: 1.5rem; color: var(--pink); }
+    #stage-3 p  { color: #aaa; font-size: .95rem; max-width: 400px; text-align: center; }
+
+    #scratch-container {
+      position: relative;
+      border: 3px solid rgba(255,255,255,.15);
+      border-radius: var(--radius);
+      overflow: hidden;
+      /* max size so it fits the viewport comfortably */
+      max-width: 70vw;
+      max-height: 60vh;
+      line-height: 0;          /* remove inline spacing under img */
+    }
+    #scratch-photo {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    #scratch-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    /* Progress bar */
+    #scratch-progress-bar {
+      width: 260px;
+      height: 8px;
+      background: rgba(255,255,255,.12);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #scratch-progress-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--pink), var(--gold));
+      border-radius: 4px;
+      transition: width .25s ease;
+    }
+
+    .paint-btns { display: flex; gap: 12px; }
+
+    /* ───────────── Stage 4 — Quiz ───────────── */
+    #stage-4 {
+      flex-direction: column; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #16213e, #1a1a2e);
+      gap: 24px;
+    }
+    #stage-4 h2 { font-size: 1.6rem; color: var(--gold); }
+    #quiz-form {
+      display: flex; flex-direction: column; gap: 18px;
+      background: rgba(255,255,255,.06); padding: 28px; border-radius: var(--radius);
+      min-width: 320px;
+    }
+    #quiz-form label { font-size: .95rem; color: #ccc; display: flex; flex-direction: column; gap: 6px; }
+    #quiz-form input {
+      padding: 10px 14px; border: 2px solid rgba(255,255,255,.15); border-radius: 8px;
+      background: rgba(0,0,0,.3); color: #fff; font-size: 1rem; outline: none;
+      transition: border-color .2s;
+    }
+    #quiz-form input[type="text"]:focus { border-color: var(--pink); }
+
+    /* ── Q2 Infinity Slider ── */
+    #q2-slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    #q2-slider-wrap .slider-label {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: rgba(255,255,255,.5);
+      min-width: 24px;
+      text-align: center;
+      transition: color .3s, transform .3s, text-shadow .3s;
+    }
+    /* Glow the +∞ label when slider is maxed */
+    #q2-slider-wrap .slider-label.glow {
+      color: var(--gold);
+      transform: scale(1.3);
+      text-shadow: 0 0 12px rgba(255, 214, 10, .6);
+    }
+
+    #q2 {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #e63946 0%, #888 50%, var(--gold) 100%);
+      outline: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+    #q2::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #fff, #ccc);
+      border: 2px solid var(--pink);
+      box-shadow: 0 2px 8px rgba(0,0,0,.35);
+      cursor: grab;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #q2::-webkit-slider-thumb:active { cursor: grabbing; }
+    #q2::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #fff, #ccc);
+      border: 2px solid var(--pink);
+      box-shadow: 0 2px 8px rgba(0,0,0,.35);
+      cursor: grab;
+    }
+    /* Gold glow when maxed */
+    #q2.maxed::-webkit-slider-thumb {
+      border-color: var(--gold);
+      box-shadow: 0 0 14px rgba(255, 214, 10, .6);
+    }
+    #q2.maxed::-moz-range-thumb {
+      border-color: var(--gold);
+      box-shadow: 0 0 14px rgba(255, 214, 10, .6);
+    }
+
+    #q2-value {
+      text-align: center;
+      font-size: .9rem;
+      font-weight: 700;
+      color: #aaa;
+      min-height: 1.4em;
+      transition: color .3s;
+    }
+    #q2-value.infinity {
+      color: var(--gold);
+      font-size: 1.1rem;
+    }
+
+    #quiz-error { color: #e63946; font-size: .85rem; display: none; text-align: center; }
+    #quiz-error.show { display: block; }
+
+    /* ───────────── Magic Conch Shell (Quiz Q3) ───────────── */
+    #conch-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-top: 8px;
+    }
+    .conch-question {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--pink);
+      text-align: center;
+    }
+    .conch-hint {
+      font-size: .85rem;
+      color: #aaa;
+      animation: conchHintPulse 1.8s ease-in-out infinite;
+    }
+    .conch-hint.hidden { display: none; }
+    @keyframes conchHintPulse {
+      0%, 100% { opacity: .5; }
+      50% { opacity: 1; }
+    }
+
+    /* Horizontal track: anchor ── string ── conch */
+    #conch-track {
+      position: relative;
+      display: flex;
+      align-items: center;
+      height: 170px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Fixed anchor dot on the left */
+    #conch-anchor {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #ddd, #888);
+      border: 2px solid #666;
+      box-shadow: 0 2px 8px rgba(0,0,0,.4);
+      flex-shrink: 0;
+      z-index: 2;
+    }
+
+    /* String connecting anchor to conch */
+    #conch-string {
+      width: 30px;           /* JS will update this dynamically */
+      height: 3px;
+      background: #999;
+      border-radius: 2px;
+      flex-shrink: 0;
+      transition: none;      /* JS controls width directly */
+      box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+    /* Snap-back animation class (added by JS after release) */
+    #conch-string.snap-back {
+      transition: width .4s cubic-bezier(.5, 1.8, .4, 1);
+    }
+
+    /* Draggable conch */
+    #conch-draggable {
+      width: 140px;
+      height: 170px;
+      flex-shrink: 0;
+      cursor: grab;
+      z-index: 3;
+      transition: none;
+    }
+    #conch-draggable:active { cursor: grabbing; }
+    #conch-draggable.snap-back {
+      transition: transform .4s cubic-bezier(.5, 1.8, .4, 1);
+    }
+
+    #conch-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 18px rgba(200, 120, 220, .45));
+      transition: filter .3s;
+      pointer-events: none;   /* so drag events fire on parent */
+    }
+    #conch-draggable:hover #conch-img {
+      filter: drop-shadow(0 4px 24px rgba(200, 120, 220, .7));
+    }
+
+    /* Conch answer speech bubble */
+    #conch-answer {
+      opacity: 0;
+      transform: scale(.7) translateY(-10px);
+      transition: opacity .4s ease, transform .4s ease;
+      background: rgba(255, 255, 255, .12);
+      border: 2px solid var(--gold);
+      border-radius: 16px;
+      padding: 12px 32px;
+      pointer-events: none;
+    }
+    #conch-answer.show {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    #conch-answer-text {
+      font-size: 1.6rem;
+      font-weight: 900;
+      background: linear-gradient(90deg, var(--pink), var(--gold));
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    /* Shake animation when conch speaks */
+    @keyframes conchShake {
+      0%, 100% { transform: rotate(0deg); }
+      15% { transform: rotate(-6deg); }
+      30% { transform: rotate(5deg); }
+      45% { transform: rotate(-4deg); }
+      60% { transform: rotate(3deg); }
+      75% { transform: rotate(-2deg); }
+      90% { transform: rotate(1deg); }
+    }
+    #conch-draggable.speaking #conch-img {
+      animation: conchShake .6s ease;
+    }
+
+    /* ───────────── Stage 5 — Proposal ───────────── */
+    #stage-5 {
+      flex-direction: column; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #16213e, #0f3460);
+      gap: 20px; position: relative; overflow: hidden;
+    }
+
+    /* Row holding phrase + spinner side-by-side */
+    #proposal-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    /* Landing zone for the animated phrase */
+    #proposal-phrase {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      pointer-events: none;
+      min-height: 60px;
+    }
+    #proposal-phrase .phrase-letter {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.4rem;
+      font-weight: 900;
+      color: var(--gold);
+      opacity: 0;
+    }
+    #proposal-phrase .phrase-letter.landed {
+      opacity: 1;
+    }
+    #proposal-phrase .phrase-space {
+      width: 12px;
+    }
+
+    /* Flying letter clones */
+    .flying-letter {
+      position: fixed;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      color: var(--gold);
+      z-index: 10001;
+      pointer-events: none;
+      transition: all 1s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    /* Slot-machine word spinner */
+    #word-spinner {
+      height: 60px;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .4s ease;
+      position: relative;
+    }
+    #word-spinner.visible {
+      opacity: 1;
+    }
+    #word-spinner-track {
+      display: flex;
+      flex-direction: column;
+      transition: transform 3.5s cubic-bezier(.15, .6, .2, 1);
+    }
+    #word-spinner-track .spin-word {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      font-size: 2.4rem;
+      font-weight: 900;
+      color: var(--pink);
+      white-space: nowrap;
+      padding: 0 4px;
+    }
+    #word-spinner-track .spin-word.final {
+      color: var(--gold);
+    }
+
+    #btn-yes {
+      position: fixed;
+      background: var(--pink); color: #fff;
+      padding: 16px 48px; font-size: 1.3rem; font-weight: 800;
+      border: none; border-radius: var(--radius); cursor: pointer;
+      transform: translate(-50%, -50%);
+      z-index: 100;
+      transition: box-shadow .15s, scale .15s;
+      pointer-events: auto;
+    }
+    #btn-yes:hover { scale: 1.08; box-shadow: 0 0 30px rgba(255,77,109,.6); }
+
+    /* ───────────── Stage 6 — Photo Matrix ───────────── */
+    #stage-6 {
+      background: #000;
+      overflow: hidden;
+    }
+
+    #photo-matrix {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      width: 100%;
+      height: 100%;
+      padding: 0 20px;
+    }
+
+    .photo-column {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .photo-track {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      animation: scrollUp linear infinite;
+    }
+
+    .photo-track.down {
+      animation-name: scrollDown;
+    }
+
+    .photo-track img {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      border-radius: 8px;
+      filter: grayscale(20%) brightness(80%);
+      transition: filter 0.5s;
+    }
+
+    .photo-track img:hover {
+      filter: grayscale(0%) brightness(100%);
+    }
+
+    @keyframes scrollUp {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-50%); }
+    }
+
+    @keyframes scrollDown {
+      from { transform: translateY(-50%); }
+      to   { transform: translateY(0); }
+    }
+
+    /* ───────────── Confetti ───────────── */
+    .confetti-container {
+      position: fixed; inset: 0; pointer-events: none; z-index: 9999; overflow: hidden;
+    }
+    .confetti-piece {
+      position: absolute;
+      width: 10px; height: 10px;
+      opacity: .9;
+      animation: confettiFall linear forwards;
+    }
+    @keyframes confettiFall {
+      0%   { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+
+    /* ───────────── Global Letter Tracker ───────────── */
+    #letter-tracker {
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+      z-index: 10000; pointer-events: none;
+      display: none; align-items: center; gap: 4px;
+      background: rgba(0,0,0,.55); backdrop-filter: blur(8px);
+      padding: 8px 20px; border-radius: 999px;
+    }
+    #letter-tracker .lt-char {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 30px;
+      font-size: 1rem; font-weight: 800; letter-spacing: 1px;
+      border-bottom: 2px solid rgba(255,255,255,.2);
+      color: rgba(255,255,255,.25);
+      transition: color .4s, border-color .4s, transform .35s;
+    }
+    #letter-tracker .lt-char.revealed {
+      color: var(--gold);
+      border-color: var(--gold);
+      transform: scale(1.15);
+    }
+    #letter-tracker .lt-char.pop {
+      animation: letterPop .45s ease;
+    }
+    #letter-tracker .lt-space {
+      width: 14px; border: none;
+    }
+    @keyframes letterPop {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.45); color: #fff; }
+      100% { transform: scale(1.15); }
+    }
+
+    body.mobile-blocked #letter-tracker { display: none !important; }
+
+    /* ───────────── Reset Button (global) ───────────── */
+    #btn-reset {
+      position: fixed; top: 16px; right: 16px; z-index: 10000;
+      width: 42px; height: 42px; border: none; border-radius: 50%;
+      background: rgba(255,255,255,.1); backdrop-filter: blur(6px);
+      color: #fff; font-size: 1.2rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .2s;
+    }
+    #btn-reset:hover { background: rgba(255,77,109,.6); transform: rotate(-45deg) scale(1.1); }
+    #btn-reset svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ───────────── Mobile Gate ───────────── */
+    #mobile-gate {
+      display: none;
+      position: fixed; inset: 0; z-index: 99999;
+      background: linear-gradient(135deg, #16213e 0%, #1a1a2e 50%, #0f3460 100%);
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 24px; text-align: center; padding: 32px;
+    }
+    #mobile-gate .gate-icon { font-size: 4rem; }
+    #mobile-gate h1 {
+      font-size: 1.6rem;
+      background: linear-gradient(90deg, var(--pink), var(--gold));
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    #mobile-gate p { color: #aaa; font-size: 1rem; max-width: 340px; line-height: 1.6; }
+
+    /* When mobile-gate is active, hide everything else */
+    body.mobile-blocked #btn-reset,
+    body.mobile-blocked .stage { display: none !important; }
+    body.mobile-blocked #mobile-gate { display: flex; }
+
+    /* ───────────── Utility ───────────── */
+    .z1 { position: relative; z-index: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- ============== GLOBAL LETTER TRACKER ============== -->
+  <div id="letter-tracker"></div>
+
+  <!-- ============== GLOBAL RESET BUTTON ============== -->
+  <button id="btn-reset" title="Reset progress">
+    <svg viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  </button>
+
+  <!-- ============== STAGE 0 — INTRO ============== -->
+  <section id="stage-0" class="stage active">
+    <div class="hearts-bg" id="hearts-bg"></div>
+    <h1 class="z1">Valentine's Quest</h1>
+    <p class="z1">An adventure made with love.</p>
+    <button class="btn btn-primary z1" id="btn-start">Start Game</button>
+  </section>
+
+  <!-- ============== STAGE 1 — DRIVING ============== -->
+  <section id="stage-1" class="stage">
+    <div id="driving-hud">
+      <span class="hud-label">Arrows to drive — collect all letters!</span>
+    </div>
+    <div id="driving-success">
+      <h2>All Letters Collected!</h2>
+      <button class="btn btn-gold" id="btn-driving-next">Continue &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============== STAGE 2 — PUZZLE ============== -->
+  <section id="stage-2" class="stage">
+    <h2>Jigsaw Puzzle</h2>
+    <p style="color:#aaa;font-size:.9rem;margin-bottom:4px;">I remember that puzzle...</p>
+    
+    <div id="puzzle-flip-container">
+      <div id="puzzle-canvas-wrapper">
+        <div id="puzzle-canvas"></div>
+        <div id="puzzle-back">
+          <span class="flip-label">Letters Unlocked!</span>
+          <div class="flip-letters" id="flip-letters"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="puzzle-success">
+      <button class="btn btn-gold" id="btn-puzzle-next">Next Stage &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============== STAGE 3 — SCRATCH-TO-REVEAL ============== -->
+  <section id="stage-3" class="stage">
+    <h2>Scratch to Reveal!</h2>
+    <p>Scratch away the sketch to uncover the photo underneath.</p>
+    <div id="scratch-container">
+      <img id="scratch-photo" />
+      <canvas id="scratch-canvas"></canvas>
+    </div>
+    <div id="scratch-progress-bar"><div id="scratch-progress-fill"></div></div>
+    <div class="paint-btns">
+      <button class="btn btn-gold" id="btn-scratch-next" style="display:none;">Next Stage &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============== STAGE 4 — QUIZ ============== -->
+  <section id="stage-4" class="stage">
+    <h2>Love Quiz</h2>
+    <form id="quiz-form" autocomplete="off">
+      <label>
+        Do you love me? (yes / no)
+        <input type="text" id="q1" required />
+      </label>
+      <label>
+        How much do you love me?
+        <div id="q2-slider-wrap">
+          <span class="slider-label">−∞</span>
+          <input type="range" id="q2" min="0" max="100" value="50" />
+          <span class="slider-label">+∞</span>
+        </div>
+        <div id="q2-value">0</div>
+      </label>
+      <p id="quiz-error">Some answers are wrong — try again!</p>
+    </form>
+
+    <!-- Magic Conch Shell — Q3 -->
+    <div id="conch-section">
+      <p class="conch-question">How much does Kuljit love you?</p>
+      <div id="conch-track">
+        <!-- Fixed anchor on the left -->
+        <div id="conch-anchor"></div>
+        <!-- Stretchy string connecting anchor to conch -->
+        <div id="conch-string"></div>
+        <!-- Draggable conch image -->
+        <div id="conch-draggable">
+          <img src="conch.webp" alt="Magic Conch Shell" id="conch-img" />
+        </div>
+      </div>
+      <div id="conch-answer">
+        <span id="conch-answer-text">Extremely</span>
+      </div>
+      <p class="conch-hint">&#8592; Drag the conch to pull the string! &#8594;</p>
+    </div>
+  </section>
+
+  <!-- ============== STAGE 5 — PROPOSAL ============== -->
+  <section id="stage-5" class="stage">
+    <div id="proposal-row">
+      <div id="proposal-phrase"></div>
+      <div id="word-spinner">
+        <div id="word-spinner-track"></div>
+      </div>
+    </div>
+    <button id="btn-yes">YES</button>
+  </section>
+
+  <!-- ============== STAGE 6 — PHOTO MATRIX ============== -->
+  <section id="stage-6" class="stage">
+    <div id="photo-matrix"></div>
+  </section>
+
+  <!-- ============== FADE OVERLAY ============== -->
+  <div id="fade-overlay" style="position:fixed; inset:0; background:black; opacity:0; pointer-events:none; transition:opacity 2s; z-index:20000;"></div>
+
+  <!-- ============== MOBILE GATE ============== -->
+  <div id="mobile-gate">
+    <div class="gate-icon">💻</div>
+    <h1>Valentine's Quest</h1>
+    <p>This experience is designed for a laptop or desktop computer. Please open this page on a bigger screen to play!</p>
+  </div>
+
+  <!-- ============== MOBILE CHECK (runs before game) ============== -->
+  <script>
+    (function() {
+      var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                  || (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+      if (isMobile) {
+        document.body.classList.add('mobile-blocked');
+        // Prevent the game module from loading
+        var gameScript = document.querySelector('script[src="game.js"]');
+        if (gameScript) gameScript.remove();
+      }
+    })();
+  </script>
+
+  <!-- ============== ENTRY POINT ============== -->
+  <script type="module" src="game.js"></script>
+</body>
+</html>
