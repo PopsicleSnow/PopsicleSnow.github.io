@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 /* ══════════════════════════════════════════════════════════════
    1.  STATE MANAGEMENT
@@ -211,17 +212,20 @@ function initDriving() {
 
   // ── Player (Car) ──
   const carGroup = new THREE.Group();
+
+  // ── Box car (original procedural model) ──
+  const boxCarGroup = new THREE.Group();
   // Body
   const bodyGeo = new THREE.BoxGeometry(2, 0.8, 3.5);
   const bodyMat = new THREE.MeshStandardMaterial({ color: 0x000802 });
-  carGroup.add(new THREE.Mesh(bodyGeo, bodyMat));
+  boxCarGroup.add(new THREE.Mesh(bodyGeo, bodyMat));
   // Cabin
   const cabinGeo = new THREE.BoxGeometry(1.6, 0.7, 1.8);
   const cabinMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c });
   const cabin = new THREE.Mesh(cabinGeo, cabinMat);
   cabin.position.y = 0.7;
   cabin.position.z = -0.2;
-  carGroup.add(cabin);
+  boxCarGroup.add(cabin);
 
   // ── VW Emblem (Back Bumper) — loaded from GLB model ──
   const gltfLoader = new GLTFLoader();
@@ -233,8 +237,49 @@ function initDriving() {
     // Rotate to face outward from the back of the car
     emblem.rotation.y = 0;
     emblem.rotation.x = Math.PI / 4;
-    carGroup.add(emblem);
+    boxCarGroup.add(emblem);
   });
+
+  carGroup.add(boxCarGroup);
+
+  // ── Volks GLB car (full 3D model, DRACO-compressed) ──
+  const volksCarGroup = new THREE.Group();
+  volksCarGroup.visible = false; // hidden by default
+
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+
+  const volksLoader = new GLTFLoader();
+  volksLoader.setDRACOLoader(dracoLoader);
+
+  let volksLoaded = false;
+  volksLoader.load('volks.glb', (gltf) => {
+    const volksModel = gltf.scene;
+    // Auto-fit: compute bounding box and normalise to roughly match box-car size
+    const box = new THREE.Box3().setFromObject(volksModel);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const desiredSize = 6; // roughly same length as box car
+    const scaleFactor = desiredSize / maxDim;
+    volksModel.scale.setScalar(scaleFactor);
+
+    // Re-centre so the model sits at the group origin
+    const centre = box.getCenter(new THREE.Vector3());
+    volksModel.rotation.y = Math.PI;
+    volksModel.position.set(
+      -centre.x * scaleFactor,
+      (-centre.y * scaleFactor) + 0.5,
+      -centre.z * scaleFactor,
+    );
+
+    volksCarGroup.add(volksModel);
+    volksLoaded = true;
+  });
+
+  carGroup.add(volksCarGroup);
+
+  // ── Car model toggle (P key) ──
+  let usingVolksModel = false;
 
   carGroup.position.y = 0.5;
   scene.add(carGroup);
@@ -339,7 +384,16 @@ function initDriving() {
 
   // ── Controls ──
   const keys = {};
-  window.addEventListener('keydown', e => { keys[e.key] = true; });
+  window.addEventListener('keydown', e => {
+    keys[e.key] = true;
+
+    // Toggle car model with P key
+    if ((e.key === 'p' || e.key === 'P') && volksLoaded) {
+      usingVolksModel = !usingVolksModel;
+      boxCarGroup.visible   = !usingVolksModel;
+      volksCarGroup.visible =  usingVolksModel;
+    }
+  });
   window.addEventListener('keyup',   e => { keys[e.key] = false; });
 
   const speed    = 0.23;
