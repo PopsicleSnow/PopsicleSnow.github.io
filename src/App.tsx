@@ -73,6 +73,13 @@ function App() {
           <div className="space-y-8">
             <div>
               <div className="flex items-start justify-between mb-1">
+                <h3 className="font-medium text-gray-900">Sofware Engineering Intern</h3>
+              </div>
+              <p className="text-gray-600 text-sm mb-2">Google - Summer 2026</p>
+            </div>
+            
+            <div>
+              <div className="flex items-start justify-between mb-1">
                 <h3 className="font-medium text-gray-900">Teaching Intern</h3>
               </div>
               <p className="text-gray-600 text-sm mb-2">UC Berkeley EECS - Fall 2025</p>
