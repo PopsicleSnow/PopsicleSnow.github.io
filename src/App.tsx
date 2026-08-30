@@ -60,7 +60,7 @@ function App() {
           </div>
 
           <p className="text-gray-800 leading-relaxed max-w-2xl font-sans">
-            I'm a third-year UC Berkeley student studying Electrical Engineering and Computer Science.
+            I'm a fourth-year UC Berkeley student studying Electrical Engineering and Computer Science.
           </p>
           <p className="text-gray-800 leading-relaxed max-w-2xl font-sans">
             I'm interested in security, backend systems, and performance. I'm excited about building systems and software that solve real problems. 
